@@ -1,0 +1,30 @@
+const {chromium}=require('playwright');
+(async()=>{
+ const b=await chromium.launch();const p=await b.newPage({viewport:{width:1080,height:1920}});
+ const errs=[];p.on('pageerror',e=>errs.push(e.message));
+ await p.goto('file:///home/user/-/ofd_terminals/build/reel.html');
+ await p.evaluate(()=>{
+  let s='';
+  s+=G(0,540,1,shopBg(1400));
+  s+=G(260,1280,1.05,person({hair:'bun',apron:true,pose:'chin',mood:'puzzled',tilt:-4}));
+  s+=G(830,950,1,cloud('ОФД'));
+  s+=G(965,860,1,qBadge(46));
+  s+=`<path d="M560 1235 Q600 1090 700 1035" fill="none" stroke="${TEAL}" stroke-width="10" stroke-linecap="round" stroke-dasharray="1 24"/>`;
+  s+=`<path d="M760 1100 L800 1040" fill="none" stroke="#9aa3ad" stroke-width="10" stroke-linecap="round" stroke-dasharray="1 24"/>`;
+  s+=counter(1280)+`<rect x="-20" y="1690" width="1120" height="240" fill="${WOOD}"/>`;
+  s+=G(560,1500,.95,terminal(RED,'ok',0));
+  s+=G(760,1500,.95,terminal('#1f9d55','idle',1));
+  s+=G(960,1500,.95,terminal('#3a6fd8','idle',.8));
+  s+=G(590,1110,1,checkBadge(40));
+  s+=G(840,1090,1,crossBadge(40));
+  s+=`<rect x="0" y="0" width="1080" height="760" fill="${NAVY}"/><rect x="0" y="756" width="1080" height="10" fill="${AMBER}"/>`;
+  s+=G(540,330,1,pill('ОФД · ТЕРМИНАЛ',AMBER,INK,34));
+  s+=`<text x="540" y="480" font-size="86" font-weight="900" fill="#fff" text-anchor="middle">Бірнеше терминал —</text>`;
+  s+=`<text x="540" y="610" font-size="124" font-weight="900" fill="${AMBER}" text-anchor="middle">чек ОФД-ға</text>`;
+  s+=`<text x="540" y="720" font-size="96" font-weight="900" fill="#fff" text-anchor="middle">кете ме?</text>`;
+  s+=G(540,1580,.92,`<rect x="-400" y="-62" width="800" height="124" rx="62" fill="#fff" stroke="${INK}" stroke-width="6"/>`+txt(0,20,'Слип-чек ≠ ОФД',58,RED,900));
+  document.getElementById('stage').innerHTML=s;
+ });
+ await p.screenshot({path:'/home/user/-/ofd_terminals/ofd_terminals_cover_1080x1920.png'});
+ console.log('errors',errs);await b.close();
+})();
