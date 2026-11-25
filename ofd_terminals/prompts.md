@@ -44,7 +44,7 @@ Modern editorial business comic illustration, crisp ink outlines, flat colors wi
 [STYLE] The shop owner smiles as a customer taps a phone on a sleek POS terminal. The terminal screen shows a big green checkmark, and in the same moment a digital receipt with a small cloud sync icon flies straight from the terminal up into a cloud with a green checkmark, one smooth motion. No cash register needed on the counter. Fresh mint green and teal tones, relaxed happy mood.
 ```
 
-## Кадр 4а · 0:55–1:10 · Другие банки: бумажный слип
+## Кадр 4а · 0:55–1:18 · Другие банки: бумажный слип
 
 **Подпись сверху:** Слип-чек ≠ ОФД
 
@@ -52,7 +52,7 @@ Modern editorial business comic illustration, crisp ink outlines, flat colors wi
 [STYLE] A row of several different generic bank POS terminals in different colors (green, orange, dark blue) on the counter, each printing a short paper card slip. Next to the slips a large soft red cross mark, and a faded grey cloud with no connection line, showing the slips do not reach the tax cloud. The shop owner holds one slip and looks at it doubtfully. Warm gray background with muted red accent.
 ```
 
-## Кадр 4б · 1:10–1:26 · Пробить чек через кассу
+## Кадр 4б · 1:18–1:26 · Пробить чек через кассу
 
 **Подпись сверху:** Чекті кассадан бөлек соғыңыз
 
@@ -86,7 +86,7 @@ Modern editorial business comic illustration, crisp ink outlines, flat colors wi
 | 1 | 0:00–0:17 | 17 с | Несколько терминалов |
 | 2 | 0:17–0:37 | 20 с | Что такое ОФД |
 | 3 | 0:37–0:55 | 18 с | Kaspi: чек + ОФД сразу |
-| 4а | 0:55–1:10 | 15 с | Слип-чек других банков |
-| 4б | 1:10–1:26 | 16 с | Чек через свою кассу |
+| 4а | 0:55–1:18 | 23 с | Слип-чек других банков |
+| 4б | 1:18–1:26 | 8 с | Чек через свою кассу |
 | 5 | 1:26–1:45 | 19 с | Путаница в учёте |
 | 6 | 1:45–2:07 | 22 с | Правило + призыв |

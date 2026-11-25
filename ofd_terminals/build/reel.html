@@ -1,0 +1,384 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+html,body{margin:0;padding:0;background:#13294b;width:1080px;height:1920px;overflow:hidden}
+svg{display:block}
+text{font-family:Inter,sans-serif}
+</style></head>
+<body>
+<svg id="stage" width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg"></svg>
+<script src="cues.js"></script>
+<script>
+// ---------- palette ----------
+const INK='#1c2230', TEAL='#138a8a', TEAL_D='#0e5f63', AMBER='#f4a62a', CREAM='#fbf3e4',
+  NAVY='#13294b', GREEN='#2fb36b', RED='#e5484d', SKIN='#f0c19c', HAIR='#2a1b17',
+  WOOD='#d99a5b', WOOD_D='#b4773c', WALL='#fbf1df', SKY='#eaf4f5';
+const SW=6;
+const TOTAL=127.0;
+
+// ---------- helpers ----------
+const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,p)=>a+(b-a)*p;
+const easeOut=p=>1-Math.pow(1-clamp(p),3);
+const easeInOut=p=>{p=clamp(p);return p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2};
+function back(p){p=clamp(p);const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(p-1,3)+c1*Math.pow(p-1,2)}
+const prog=(t,s,d)=>clamp((t-s)/d);
+function pop(t,s,d=.45){return t<s?0:back(prog(t,s,d))}
+function G(x,y,s,inner,op=1,r=0){
+  if(op<=0.001||s<=0.001) return '';
+  return `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${r.toFixed(2)}) scale(${s.toFixed(4)})" opacity="${clamp(op).toFixed(3)}">${inner}</g>`;
+}
+function popG(t,s,x,y,inner,sc=1,d=.45){const p=pop(t,s,d);return G(x,y,p*sc,inner,clamp((t-s)/.15));}
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+function txt(x,y,str,size,fill,w=800,anchor='middle',extra=''){
+  return `<text x="${x}" y="${y}" font-size="${size}" font-weight="${w}" fill="${fill}" text-anchor="${anchor}" ${extra}>${esc(str)}</text>`;
+}
+function along(pts,p){
+  let L=0,seg=[];for(let i=1;i<pts.length;i++){const d=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);seg.push(d);L+=d}
+  let target=clamp(p)*L;
+  for(let i=0;i<seg.length;i++){ if(target<=seg[i]||i==seg.length-1){const q=seg[i]?target/seg[i]:0;return [lerp(pts[i][0],pts[i+1][0],q),lerp(pts[i][1],pts[i+1][1],q)]} target-=seg[i]}
+}
+function bez(a,c,b,n=24){const r=[];for(let i=0;i<=n;i++){const u=i/n;r.push([(1-u)*(1-u)*a[0]+2*(1-u)*u*c[0]+u*u*b[0],(1-u)*(1-u)*a[1]+2*(1-u)*u*c[1]+u*u*b[1]])}return r}
+const ptsD=pts=>'M'+pts.map(p=>p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' L');
+function dotted(pts,col,t,draw=1,w=11){
+  // partially drawn dotted path flowing
+  const n=Math.max(2,Math.round(pts.length*clamp(draw)));
+  if(draw<=0) return '';
+  return `<path d="${ptsD(pts.slice(0,n))}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round" stroke-dasharray="1 24" stroke-dashoffset="${(-t*40).toFixed(1)}"/>`;
+}
+
+// ---------- props ----------
+function checkBadge(r=40,col=GREEN){return `<circle r="${r}" fill="${col}" stroke="${INK}" stroke-width="${SW}"/><path d="M${-r*.45} ${r*.02} L${-r*.12} ${r*.34} L${r*.5} ${-r*.32}" fill="none" stroke="#fff" stroke-width="${r*.22}" stroke-linecap="round" stroke-linejoin="round"/>`}
+function crossBadge(r=40,col=RED){const k=r*.36;return `<circle r="${r}" fill="${col}" stroke="${INK}" stroke-width="${SW}"/><path d="M${-k} ${-k} L${k} ${k} M${k} ${-k} L${-k} ${k}" stroke="#fff" stroke-width="${r*.22}" stroke-linecap="round"/>`}
+function qBadge(r=40,col=AMBER){return `<circle r="${r}" fill="${col}" stroke="${INK}" stroke-width="${SW}"/>`+txt(0,r*.36,'?',r*1.1,'#fff',900)}
+function receipt(w=90,h=120,opt={}){
+  const x=-w/2,y=-h/2,z=8,teeth=6,tw=w/teeth;
+  let d=`M${x} ${y} L${x+w} ${y} L${x+w} ${y+h}`;
+  for(let i=teeth;i>0;i--){d+=` L${x+(i-.5)*tw} ${y+h-z} L${x+(i-1)*tw} ${y+h}`}
+  d+=' Z';
+  let s=`<path d="${d}" fill="${opt.fill||'#fff'}" stroke="${opt.stroke||INK}" stroke-width="${opt.sw||5}" stroke-linejoin="round" ${opt.dash?'stroke-dasharray="14 10"':''}/>`;
+  if(!opt.empty){
+    for(let i=0;i<4;i++){const ly=y+18+i*(h-40)/4;const lw=i==3?w*.35:w*.62;s+=`<line x1="${x+12}" y1="${ly}" x2="${x+12+lw}" y2="${ly}" stroke="#b9c0cc" stroke-width="5" stroke-linecap="round"/>`}
+    if(opt.cloud) s+=G(w*.28,h*.26,.16,cloudShape('#7fd3cf'));
+  }
+  return s;
+}
+function cloudShape(fill){
+  const cs=[[-75,15,58],[-20,-30,72],[50,-10,62],[85,25,45]];
+  let s='';
+  cs.forEach(c=>s+=`<circle cx="${c[0]}" cy="${c[1]}" r="${c[2]}" fill="${fill}" stroke="${INK}" stroke-width="${SW*2}"/>`);
+  s+=`<rect x="-120" y="15" width="240" height="58" rx="29" fill="${fill}" stroke="${INK}" stroke-width="${SW*2}"/>`;
+  cs.forEach(c=>s+=`<circle cx="${c[0]}" cy="${c[1]}" r="${c[2]}" fill="${fill}"/>`);
+  s+=`<rect x="-120" y="15" width="240" height="58" rx="29" fill="${fill}"/>`;
+  return s;
+}
+function cloud(label='ОФД',fill='#bfe8e6',lc=TEAL_D){return cloudShape(fill)+(label?txt(0,42,label,54,lc,900):'')}
+function terminal(c,scr='idle',slip=0,opt={}){
+  let s='';
+  if(slip>0){
+    const h=150*slip,top=-252-h;
+    let d=`M-48 -250 L-48 ${top}`;const n=6,tw=96/n;
+    for(let i=0;i<n;i++){d+=` L${-48+(i+.5)*tw} ${top-8} L${-48+(i+1)*tw} ${top}`}
+    d+=' L48 -250 Z';
+    s+=`<path d="${d}" fill="#fff" stroke="${INK}" stroke-width="5" stroke-linejoin="round"/>`;
+    for(let i=0;i<4;i++){const ly=top+22+i*26; if(ly<-262) s+=`<line x1="-32" y1="${ly}" x2="${i==3?0:30}" y2="${ly}" stroke="#b9c0cc" stroke-width="5" stroke-linecap="round"/>`}
+  }
+  s+=`<rect x="-85" y="-262" width="170" height="262" rx="30" fill="${c}" stroke="${INK}" stroke-width="${SW}"/>`;
+  s+=`<rect x="-55" y="-266" width="110" height="12" rx="6" fill="${INK}"/>`;
+  const scrFill=scr=='ok'?'#d7f5e3':scr=='off'?'#cfd4dc':'#e3f4f6';
+  s+=`<rect x="-60" y="-232" width="120" height="92" rx="12" fill="${scrFill}" stroke="${INK}" stroke-width="5"/>`;
+  if(scr=='ok') s+=G(0,-186,.62,checkBadge(40));
+  else if(scr=='pay') s+=`<path d="M-14 -205 q14 19 0 38 M2 -213 q20 27 0 54 M18 -221 q26 35 0 70" fill="none" stroke="${TEAL}" stroke-width="6" stroke-linecap="round"/>`;
+  else if(scr=='idle') s+=`<rect x="-40" y="-212" width="60" height="12" rx="6" fill="#9fb3c0"/><rect x="-40" y="-188" width="80" height="12" rx="6" fill="#c3d0d8"/>`;
+  for(let r=0;r<3;r++)for(let k=0;k<3;k++) s+=`<rect x="${-52+k*38}" y="${-122+r*34}" width="28" height="22" rx="7" fill="rgba(255,255,255,.55)" stroke="${INK}" stroke-width="3"/>`;
+  return s;
+}
+function register(scr='idle',label='Касса',grey=false){
+  const body=grey?'#c9ced6':'#f7f7f2', acc=grey?'#9aa3ad':TEAL;
+  let s='';
+  // screen on stand
+  s+=`<rect x="-14" y="-205" width="28" height="50" fill="${grey?'#9aa3ad':'#5b6577'}" stroke="${INK}" stroke-width="5"/>`;
+  s+=`<rect x="-90" y="-290" width="180" height="100" rx="14" fill="${grey?'#aeb5bf':'#2f3a4d'}" stroke="${INK}" stroke-width="${SW}"/>`;
+  const sc=scr=='empty'?'#dfe4ea':grey?'#cfd4dc':'#cdeeed';
+  s+=`<rect x="-74" y="-276" width="148" height="72" rx="8" fill="${sc}"/>`;
+  if(scr=='idle'){s+=`<rect x="-58" y="-260" width="80" height="12" rx="6" fill="${TEAL}"/><rect x="-58" y="-238" width="110" height="12" rx="6" fill="#8fcfcc"/>`}
+  if(scr=='empty'){s+=`<rect x="-30" y="-246" width="60" height="12" rx="6" fill="#aab3bf"/>`}
+  // body
+  s+=`<path d="M-140 -160 L140 -160 L160 -60 L-160 -60 Z" fill="${body}" stroke="${INK}" stroke-width="${SW}" stroke-linejoin="round"/>`;
+  for(let r=0;r<2;r++)for(let k=0;k<5;k++) s+=`<rect x="${-112+k*46}" y="${-146+r*38}" width="36" height="24" rx="7" fill="${r==1&&k==4?AMBER:'#e7e2d6'}" stroke="${INK}" stroke-width="3"/>`;
+  s+=`<rect x="-165" y="-62" width="330" height="62" rx="10" fill="${acc}" stroke="${INK}" stroke-width="${SW}"/>`;
+  s+=`<rect x="-35" y="-38" width="70" height="12" rx="6" fill="rgba(0,0,0,.25)"/>`;
+  if(label) s+=`<rect x="-80" y="-370" width="160" height="56" rx="28" fill="${INK}"/>`+txt(0,-331,label,32,'#fff',800);
+  return s;
+}
+function building(label='Салық'){
+  let s='';
+  s+=`<path d="M-150 -300 L0 -390 L150 -300 Z" fill="#eef1f6" stroke="${INK}" stroke-width="${SW}" stroke-linejoin="round"/>`;
+  s+=`<rect x="-160" y="-305" width="320" height="44" fill="${NAVY}" stroke="${INK}" stroke-width="${SW}"/>`+txt(0,-271,label,30,'#fff',800);
+  for(let i=0;i<4;i++) s+=`<rect x="${-125+i*75}" y="-258" width="40" height="200" fill="#fff" stroke="${INK}" stroke-width="5"/>`;
+  s+=`<rect x="-170" y="-60" width="340" height="30" fill="#dfe4ec" stroke="${INK}" stroke-width="${SW}"/>`;
+  s+=`<rect x="-190" y="-32" width="380" height="32" fill="#cfd6e1" stroke="${INK}" stroke-width="${SW}"/>`;
+  return s;
+}
+function coins(n=3){let s='';for(let i=0;i<n;i++){const y=-i*22;s+=`<ellipse cx="0" cy="${y}" rx="55" ry="20" fill="${AMBER}" stroke="${INK}" stroke-width="5"/>`}
+  s+=txt(0,-(n-1)*22+11,'₸',30,INK,900);return s}
+function coin(){return `<circle r="30" fill="${AMBER}" stroke="${INK}" stroke-width="5"/>`+txt(0,11,'₸',32,INK,900)}
+function card(label='Шот'){return `<rect x="-110" y="-70" width="220" height="140" rx="18" fill="${NAVY}" stroke="${INK}" stroke-width="${SW}"/><rect x="-110" y="-38" width="220" height="26" fill="${INK}"/><rect x="-84" y="10" width="44" height="32" rx="6" fill="${AMBER}"/>`+txt(40,40,label,34,'#fff',800)}
+function pill(str,bg=INK,fg='#fff',size=34){const w=str.length*size*.62+56;return `<rect x="${-w/2}" y="${-size*.95}" width="${w}" height="${size*1.9}" rx="${size*.95}" fill="${bg}" stroke="${INK}" stroke-width="4"/>`+txt(0,size*.36,str,size,fg,800)}
+function arrow(pts,col,draw=1){
+  const n=Math.max(2,Math.round(pts.length*clamp(draw)));const sub=pts.slice(0,n);
+  let s=`<path d="${ptsD(sub)}" fill="none" stroke="${INK}" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/><path d="${ptsD(sub)}" fill="none" stroke="${col}" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>`;
+  if(draw>=.98){const a=pts[pts.length-2],b=pts[pts.length-1];const ang=Math.atan2(b[1]-a[1],b[0]-a[0])*180/Math.PI;
+    s+=G(b[0],b[1],1,`<path d="M-8 -26 L26 0 L-8 26 Z" fill="${col}" stroke="${INK}" stroke-width="5" stroke-linejoin="round"/>`,1,ang)}
+  return s;
+}
+function bubble(w,h,tailX,tailY,inner,fill='#fff'){
+  return `<path d="M${-30} ${h/2-4} L${tailX} ${tailY} L${30} ${h/2-4}" fill="${fill}" stroke="${INK}" stroke-width="${SW}" stroke-linejoin="round"/><rect x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" rx="${Math.min(h/2,46)}" fill="${fill}" stroke="${INK}" stroke-width="${SW}"/><path d="M-26 ${h/2-6} L${tailX*.6} ${tailY*.6+h*.2} L26 ${h/2-6} Z" fill="${fill}"/>`+inner;
+}
+function thought(inner){return `<circle cx="-120" cy="150" r="14" fill="#fff" stroke="${INK}" stroke-width="5"/><circle cx="-80" cy="105" r="22" fill="#fff" stroke="${INK}" stroke-width="5"/><ellipse rx="115" ry="90" fill="#fff" stroke="${INK}" stroke-width="${SW}"/>`+inner}
+function phoneHand(){return `<path d="M0 0 L260 60" stroke="${INK}" stroke-width="64" stroke-linecap="round"/><path d="M0 0 L260 60" stroke="#e7b48d" stroke-width="50" stroke-linecap="round"/><path d="M150 35 L320 75" stroke="${INK}" stroke-width="84" stroke-linecap="round"/><path d="M150 35 L320 75" stroke="${AMBER}" stroke-width="70" stroke-linecap="round"/><rect x="-62" y="-95" width="96" height="170" rx="18" fill="${INK}" transform="rotate(-12)"/><rect x="-52" y="-82" width="76" height="140" rx="10" fill="#3d7bd9" transform="rotate(-12)"/><circle cx="12" cy="18" r="28" fill="${SKIN}" stroke="${INK}" stroke-width="5"/>`}
+function laptop(inner){return `<path d="M-200 0 L200 0 L230 30 L-230 30 Z" fill="#c9ced6" stroke="${INK}" stroke-width="${SW}" stroke-linejoin="round"/><rect x="-180" y="-250" width="360" height="245" rx="16" fill="#2f3a4d" stroke="${INK}" stroke-width="${SW}"/><rect x="-162" y="-232" width="324" height="208" rx="8" fill="#eef6f7"/>`+inner}
+function bookmark(){return `<path d="M-45 -60 L45 -60 L45 65 L0 30 L-45 65 Z" fill="${AMBER}" stroke="${INK}" stroke-width="${SW}" stroke-linejoin="round"/>`}
+function plane(){return `<path d="M-60 0 L60 -50 L20 60 L0 15 Z" fill="${TEAL}" stroke="${INK}" stroke-width="${SW}" stroke-linejoin="round"/><path d="M0 15 L60 -50" stroke="${INK}" stroke-width="5"/>`}
+function heart(){return `<path d="M0 50 C-80 0 -70 -60 -30 -60 C-10 -60 0 -45 0 -35 C0 -45 10 -60 30 -60 C70 -60 80 0 0 50 Z" fill="${RED}" stroke="${INK}" stroke-width="${SW}" stroke-linejoin="round"/>`}
+function tangle(t){
+  // scribble that draws itself
+  const pts=[];for(let i=0;i<=120;i++){const u=i/120*Math.PI*6;pts.push([Math.cos(u*1.3)*80+Math.sin(u*2.1)*30,Math.sin(u)*45+Math.cos(u*3.2)*15])}
+  const n=Math.max(2,Math.round(pts.length*clamp(t)));
+  return `<path d="${ptsD(pts.slice(0,n))}" fill="none" stroke="${RED}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>`;
+}
+
+// ---------- people ----------
+function arm(d,col){return `<path d="${d}" fill="none" stroke="${INK}" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="${col}" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>`}
+function person(o){
+  const top=o.top||'#f3e6cf', mood=o.mood||'happy', pose=o.pose||'down', tilt=o.tilt||0;
+  let s='';
+  // back hair
+  let head='';
+  if(o.hair=='bun'){head+=`<circle cx="0" cy="-418" r="36" fill="${HAIR}" stroke="${INK}" stroke-width="${SW}"/><ellipse cx="0" cy="-332" rx="84" ry="92" fill="${HAIR}" stroke="${INK}" stroke-width="${SW}"/>`}
+  head+=`<circle cx="-72" cy="-322" r="15" fill="${SKIN}" stroke="${INK}" stroke-width="5"/><circle cx="72" cy="-322" r="15" fill="${SKIN}" stroke="${INK}" stroke-width="5"/>`;
+  head+=`<circle cx="0" cy="-330" r="72" fill="${SKIN}" stroke="${INK}" stroke-width="${SW}"/>`;
+  if(o.hair=='bun') head+=`<path d="M-76 -322 C-80 -415 80 -418 76 -322 C55 -372 -10 -392 -76 -322 Z" fill="${HAIR}" stroke="${INK}" stroke-width="5" stroke-linejoin="round"/>`;
+  else head+=`<path d="M-76 -318 C-86 -420 86 -420 76 -318 C66 -360 20 -378 -20 -364 C-50 -356 -66 -342 -76 -318 Z" fill="${HAIR}" stroke="${INK}" stroke-width="5" stroke-linejoin="round"/>`;
+  // eyes
+  const blink=o.blink?.15:1;
+  head+=`<ellipse cx="-26" cy="-322" rx="7.5" ry="${9.5*blink}" fill="${INK}"/><ellipse cx="26" cy="-322" rx="7.5" ry="${9.5*blink}" fill="${INK}"/>`;
+  // brows
+  const br={happy:['M-40 -348 Q-26 -356 -12 -349','M12 -349 Q26 -356 40 -348'],
+    puzzled:['M-40 -350 Q-26 -358 -12 -352','M12 -360 Q26 -366 40 -356'],
+    doubt:['M-40 -346 L-12 -350','M12 -362 Q26 -368 40 -358'],
+    worried:['M-40 -344 L-14 -356','M14 -356 L40 -344']}[mood];
+  head+=`<path d="${br[0]} ${br[1]}" fill="none" stroke="${INK}" stroke-width="6" stroke-linecap="round"/>`;
+  const mouth={happy:`<path d="M-26 -296 Q0 -266 26 -296 Z" fill="#b8434a" stroke="${INK}" stroke-width="5" stroke-linejoin="round"/>`,
+    puzzled:`<ellipse cx="8" cy="-290" rx="9" ry="11" fill="#b8434a" stroke="${INK}" stroke-width="5"/>`,
+    doubt:`<path d="M-20 -290 Q2 -298 22 -286" fill="none" stroke="${INK}" stroke-width="6" stroke-linecap="round"/>`,
+    worried:`<path d="M-22 -284 Q0 -300 22 -284" fill="none" stroke="${INK}" stroke-width="6" stroke-linecap="round"/>`}[mood];
+  head+=mouth+`<circle cx="-46" cy="-298" r="12" fill="#f08f86" opacity=".55"/><circle cx="46" cy="-298" r="12" fill="#f08f86" opacity=".55"/>`;
+  if(o.sweat) head+=`<path d="M80 -380 q14 24 0 34 q-14 -10 0 -34 Z" fill="#8fd0f0" stroke="${INK}" stroke-width="4"/>`;
+  s+=`<rect x="-22" y="-266" width="44" height="50" fill="${SKIN}" stroke="${INK}" stroke-width="${SW}"/>`;
+  s+=`<path d="M-125 40 C-125 -110 -112 -200 -62 -228 L62 -228 C112 -200 125 -110 125 40 Z" fill="${top}" stroke="${INK}" stroke-width="${SW}" stroke-linejoin="round"/>`;
+  s+=`<path d="M-22 -228 L0 -205 L22 -228" fill="none" stroke="${INK}" stroke-width="5"/>`;
+  if(o.apron){s+=`<path d="M-60 -175 L-30 -228 M60 -175 L30 -228" stroke="${TEAL_D}" stroke-width="12" stroke-linecap="round"/><path d="M-72 -175 L72 -175 L84 40 L-84 40 Z" fill="${TEAL}" stroke="${INK}" stroke-width="${SW}" stroke-linejoin="round"/><rect x="-36" y="-110" width="72" height="50" rx="8" fill="${TEAL_D}" stroke="${INK}" stroke-width="4"/>`}
+  let hand='';
+  if(pose=='chin'){s+=arm('M-100 -190 Q-150 -40 -60 -30 L-24 -232',top);hand=`<circle cx="-20" cy="-250" r="26" fill="${SKIN}" stroke="${INK}" stroke-width="${SW}"/>`}
+  if(pose=='thumb'){s+=arm('M100 -190 Q190 -150 175 -300',top);hand=`<rect x="160" y="-388" width="22" height="50" rx="11" fill="${SKIN}" stroke="${INK}" stroke-width="5"/><circle cx="172" cy="-318" r="30" fill="${SKIN}" stroke="${INK}" stroke-width="${SW}"/>`}
+  if(pose=='hold'){s+=arm('M100 -190 Q160 -80 215 -140',top);hand=(o.item||'')+`<circle cx="222" cy="-146" r="26" fill="${SKIN}" stroke="${INK}" stroke-width="${SW}"/>`}
+  s+=`<g transform="rotate(${tilt} 0 -262)">${head}</g>`+hand;
+  return s;
+}
+
+// ---------- backgrounds ----------
+function shopBg(h=1620,dim=0){
+  let s=`<rect x="0" y="0" width="1080" height="${h}" fill="${WALL}"/>`;
+  const cols=['#f6c977','#9fd8cf','#f3a59a','#a9c4ef','#cbe3a3','#f7d9a6'];
+  [140,360].forEach((y,j)=>{
+    s+=`<rect x="0" y="${y}" width="1080" height="18" fill="#e6d3b5"/>`;
+    for(let i=0;i<9;i++){const w=60+((i*37+j*11)%40),hh=70+((i*53+j*29)%60),x=20+i*120+(j*40);s+=`<rect x="${x}" y="${y-hh}" width="${w}" height="${hh}" rx="10" fill="${cols[(i+j)%6]}" opacity=".45"/>`}
+  });
+  if(dim) s+=`<rect x="0" y="0" width="1080" height="${h}" fill="${NAVY}" opacity="${dim}"/>`;
+  return s;
+}
+function counter(y){return `<rect x="-20" y="${y}" width="1120" height="${1700-y}" fill="${WOOD}" stroke="${INK}" stroke-width="${SW}"/><rect x="-20" y="${y}" width="1120" height="34" fill="${WOOD_D}" stroke="${INK}" stroke-width="${SW}"/><rect x="-20" y="${y+90}" width="1120" height="8" fill="${WOOD_D}" opacity=".5"/>`}
+function skyBg(h=1620){let s=`<rect x="0" y="0" width="1080" height="${h}" fill="${SKY}"/>`;
+  s+=`<circle cx="120" cy="120" r="90" fill="#d6ecee"/><circle cx="980" cy="1180" r="160" fill="#d6ecee"/><circle cx="900" cy="80" r="40" fill="#f7e2b8"/>`;return s}
+
+// ---------- scenes (local time t) ----------
+const SCENES=[
+ {s:0,e:17.2,f:s1},{s:17.2,e:37.2,f:s2},{s:37.2,e:55.2,f:s3},{s:55.2,e:78.2,f:s4a},
+ {s:78.2,e:86.2,f:s4b},{s:86.2,e:105.2,f:s5},{s:105.2,e:TOTAL,f:s6}];
+const TITLES=[[0,['Бірнеше терминал болса...']],[17.2,['ОФД — салыққа','чек жіберетін жүйе']],[37.2,['Kaspi = Чек + ОФД бірге']],
+ [55.2,['Басқа банк терминалдары']],[72.7,['Слип-чек ≠ ОФД']],[78.2,['Чекті кассадан','бөлек соғыңыз']],
+ [86.2,['Есепте қате болмасын']],[105.2,['Қысқа ереже']],[122.1,['Әріптестеріңізге','жіберіңіз']]];
+
+function s1(t){
+  let s=shopBg();
+  const tilt=Math.sin(t*1.6)*4;
+  s+=G(290,770,1,person({hair:'bun',apron:true,pose:'chin',mood:t<1?'happy':'puzzled',tilt,blink:(t%3.7)<.12}));
+  s+=popG(t,2.3,500,330,thought(G(0,0,1+Math.sin(t*4)*.06,txt(0,38,'?',120,AMBER,900))));
+  s+=counter(770);
+  const cs=[RED,'#1f9d55','#3a6fd8'];
+  cs.forEach((c,i)=>{const slip=i==1?easeOut(prog(t,1.8,1.6)):0;s+=popG(t,.3+i*.35,560+i*200,1010,terminal(c,'idle',slip),.88)});
+  // foreshadow: which receipt goes to OFD?
+  if(t>11.2){
+    s+=popG(t,11.2,850,250,cloud('ОФД','#e1e6ec','#6b7686'),.75);
+    s+=dotted(bez([560,740],[620,420],[760,300]),'#9aa3ad',t,easeOut(prog(t,11.4,1)),9);
+    s+=dotted(bez([960,740],[980,480],[900,330]),'#9aa3ad',t,easeOut(prog(t,11.6,1)),9);
+    s+=popG(t,13,660,470,qBadge(34));s+=popG(t,13.3,1000,520,qBadge(34));
+  }
+  return s;
+}
+function s2(t){
+  let s=skyBg();
+  const up=[...bez([240,380],[290,230],[420,220]),...bez([660,230],[820,240],[880,330])];
+  s+=dotted(up,TEAL,t,easeOut(prog(t,2,2.2)));
+  s+=popG(t,.2,220,670,register('idle','Касса'));
+  s+=popG(t,1.0,540,240,cloud('ОФД'),1.05);
+  s+=popG(t,1.8,880,700,building('Салық'));
+  if(t>4){const per=3.2;const p=((t-4)%per)/per;const pt=along(up,easeInOut(p));s+=G(pt[0],pt[1],.62,receipt(90,120,{cloud:1}),clamp(Math.min(p*6,(1-p)*6)))}
+  s+=popG(t,1.6,540,500,pill('Чек → ОФД → Салық',TEAL_D,'#fff',32));
+  s+=popG(t,8,990,360,checkBadge(42));
+  // money flow (separate)
+  if(t>13.5){
+    const lane=[[300,930],[770,930]];
+    s+=dotted(lane,AMBER,t,easeOut(prog(t,14,1.2)));
+    s+=popG(t,13.8,210,960,coins(3));
+    s+=popG(t,14.3,880,930,card('Шот'));
+    if(t>15.2){const p=((t-15.2)%2.4)/2.4;const pt=along(lane,easeInOut(p));s+=G(pt[0],pt[1]-10,1,coin(),clamp(Math.min(p*6,(1-p)*6)))}
+    s+=popG(t,14.6,540,1060,pill('Ақша → Шот',AMBER,INK,32));
+    s+=G(540,790,1,`<line x1="-470" y1="0" x2="470" y2="0" stroke="${INK}" stroke-width="4" stroke-dasharray="18 14" opacity=".35"/>`,clamp((t-14)/.5));
+  }
+  return s;
+}
+function s3(t){
+  let s=shopBg();
+  s+=G(200,800,1,person({hair:'bun',apron:true,pose:'down',mood:'happy',tilt:Math.sin(t*1.3)*3,blink:(t%4.1)<.12}));
+  s+=popG(t,.2,560,210,cloud('ОФД'),1.0);
+  s+=counter(800);
+  const ok=t>2.8;
+  s+=popG(t,0,560,1080,terminal(RED,ok?'ok':'pay',0),1.3,.35);
+  // phone hand
+  const hx=t<1?1300:t<2.6?lerp(1300,760,easeOut(prog(t,1,1.6))):t<4.2?760:lerp(760,1300,easeInOut(prog(t,4.2,1)));
+  if(hx<1290) s+=G(hx,760,1,phoneHand());
+  if(t>2.8&&t<4.4){const p=prog(t,2.8,1.6);s+=`<circle cx="560" cy="820" r="${120+p*200}" fill="none" stroke="${GREEN}" stroke-width="10" opacity="${1-p}"/>`}
+  s+=popG(t,5.2,830,560,pill('POS + Касса',RED,'#fff',34));
+  // receipt flies to cloud
+  if(t>8.5){const p=easeInOut(prog(t,8.5,1.5));const y=lerp(700,300,p);s+=G(560,y,lerp(.5,.75,p),receipt(90,120,{cloud:1}),p<.95?1:clamp((10.4-t)/.4))}
+  s+=popG(t,10,700,150,checkBadge(46));
+  if(t>13){s+=popG(t,13,900,1350,`<g opacity=".7">${G(0,0,.55,register('idle','',true))}</g>`);s+=popG(t,13.4,980,1215,crossBadge(34))}
+  return s;
+}
+function s4a(t){
+  let s=shopBg();
+  const holding=t>12;
+  s+=G(180,800,1,person({hair:'bun',apron:true,pose:holding?'hold':'down',mood:holding?'doubt':'happy',
+    item:holding?G(222,-230,.8,receipt(90,140)):'' ,tilt:Math.sin(t*1.2)*3,blink:(t%3.9)<.12}));
+  // grey cloud
+  s+=popG(t,.4,820,210,cloud('ОФД','#e1e6ec','#6b7686'),.9);
+  s+=counter(800);
+  const ts=[['#1f9d55',4],['#7b4fd6',7.3],['#3a6fd8',8.6]];
+  ts.forEach((c,i)=>{const slip=easeOut(prog(t,12+i*.4,1.5));s+=popG(t,c[1],500+i*210,1080,terminal(c[0],'idle',slip),.9)});
+  if(t>17.5){
+    [[500,640],[710,640],[920,640]].forEach((a,i)=>{s+=G(0,0,1,`<path d="M${a[0]} ${a[1]-60} L${lerp(a[0],820,.55)} ${lerp(a[1]-60,300,.55)}" stroke="#9aa3ad" stroke-width="8" stroke-dasharray="16 14" stroke-linecap="round"/>`,clamp((t-17.5)/.4))});
+    s+=popG(t,17.8,740,420,crossBadge(52));
+    s+=popG(t,18.3,700,540,pill('Слип-чек — ОФД емес',RED,'#fff',34));
+  }
+  return s;
+}
+function s4b(t){
+  let s=shopBg();
+  s+=G(570,800,1,person({hair:'bun',apron:true,pose:'down',mood:t>6.3?'happy':'doubt',blink:(t%3.3)<.12}));
+  s+=popG(t,.6,780,210,cloud('ОФД'),1.0);
+  s+=counter(800);
+  s+=popG(t,0,230,1080,terminal('#1f9d55','idle',1),.95,.3);
+  s+=popG(t,.3,320,640,crossBadge(40));
+  s+=arrow(bez([340,900],[520,760],[600,940]),AMBER,easeOut(prog(t,2.8,.8)));
+  s+=popG(t,3.2,800,1110,register('idle','Касса'),1.1);
+  if(t>4.8){const p=easeInOut(prog(t,4.8,1.6));const y=lerp(740,300,p);s+=G(800,y,lerp(.55,.8,p),receipt(90,120,{cloud:1}),p<.95?1:clamp((6.6-t)/.4))}
+  s+=popG(t,6.4,930,150,checkBadge(48));
+  return s;
+}
+function s5(t){
+  let s=shopBg(1620,.12);
+  s+=G(300,820,1,person({hair:'short',top:'#f4b860',pose:'down',mood:t>7?'worried':'happy',sweat:t>11,tilt:Math.sin(t*1.5)*3,blink:(t%3.5)<.12}));
+  // speech bubble: thinks slip is enough
+  if(t<15.3){
+    const inner=G(-95,0,.42,terminal('#1f9d55','idle',1))+G(10,0,1,checkBadge(30))+txt(90,14,'Чек',40,INK,800);
+    s+=G(560,300,pop(t,1.2)*(t>14.8?clamp((15.3-t)/.5):1),bubble(330,170,-160,140,G(0,0,1,inner)),1);
+  } else {
+    s+=G(560,300,pop(t,15.3),bubble(330,170,-160,140,G(0,0,1.15,tangle(prog(t,15.5,1.6)))),1);
+  }
+  s+=popG(t,.5,860,270,cloud('ОФД','#e1e6ec','#6b7686'),.85);
+  if(t>11.8){s+=popG(t,11.8,860,110,receipt(80,100,{empty:1,fill:'#fff',stroke:RED,dash:1}),1);s+=popG(t,12.2,935,70,qBadge(28,RED))}
+  s+=counter(820);
+  s+=popG(t,.2,150,1060,terminal('#1f9d55','idle',.8),.7);
+  s+=popG(t,.4,560,1050,laptop(t>10.8?G(-40,-128,pop(t,10.8),coins(3))+G(80,-150,pop(t,11.1),`<circle r="34" fill="${GREEN}" stroke="${INK}" stroke-width="5"/>`+txt(0,14,'+',50,'#fff',900)):''),.9);
+  s+=popG(t,.6,880,1070,register(t>7?'empty':'idle','Касса'),.85);
+  if(t>7.2) s+=popG(t,7.2,1000,700,qBadge(34,RED));
+  if(t>15.6) s+=popG(t,15.6,860,470,pill('Есепте шатасу',RED,'#fff',32));
+  return s;
+}
+function s6(t){
+  let s=skyBg();
+  const panel=(y,inner,st)=>popG(t,st,540,y,`<rect x="-480" y="-200" width="960" height="400" rx="40" fill="#fff" stroke="${INK}" stroke-width="${SW}"/>`+inner,1,.5);
+  const q6=t>16.9?easeInOut(prog(t,16.9,.8)):0;const sc=1-q6*.3;const shift=-q6*40;
+  let top=G(-270,150,.75,terminal(RED,'ok',0))+arrow([[-150,0],[60,0]],GREEN,easeOut(prog(t,4,.6)))+G(250,-10,.85,cloud('ОФД'))+G(380,-110,pop(t,4.6),checkBadge(40))+G(-270,-150,1,pill('Kaspi',RED,'#fff',30));
+  let bot=G(-370,150,.62,terminal('#1f9d55','idle',.7))+txt(-290,20,'+',70,INK,900)+G(-160,140,.55,register('idle',''))+arrow([[-20,0],[100,0]],GREEN,easeOut(prog(t,8.5,.6)))+G(270,-10,.8,cloud('ОФД'))+G(390,-110,pop(t,9.4),checkBadge(40))+G(-300,-150,1,pill('Басқа банк',INK,'#fff',30));
+  s+=G(540*(1-sc),shift,sc,panel(330,top,3)+panel(800,bot,6.5));
+  if(t>16.9){
+    s+=popG(t,17.1,250,840,bookmark(),1.3);
+    s+=popG(t,17.5,540,840,plane(),1.4);
+    s+=popG(t,18.4,830,840,G(0,0,1+Math.max(0,Math.sin((t-18.4)*6))*.08,heart()),1.3);
+    s+=popG(t,18.8,540,1020,pill('Лайк · Пікір · Бөлісу',AMBER,INK,34));
+  }
+  return s;
+}
+
+// ---------- frame ----------
+function sceneAt(t){
+  const ILL_Y=300;let s='';
+  for(let i=0;i<SCENES.length;i++){
+    const sc=SCENES[i];const fade=.45;
+    if(t<sc.s||t>sc.e+fade) continue;
+    let op=1; if(i>0&&t<sc.s+fade) op=(t-sc.s)/fade;
+    if(t>sc.e) op=0; // previous scene stays under the next while it fades in
+    if(op<=0&&!(t>sc.e)) continue;
+    if(t>sc.e){ // underlay during next scene's fade-in
+      op=1;
+    }
+    const lt=Math.min(t,sc.e)-sc.s, D=sc.e-sc.s;
+    const k=1+.045*easeInOut(lt/D);
+    s+=`<g opacity="${op.toFixed(3)}" transform="translate(0 ${ILL_Y}) translate(540 620) scale(${k.toFixed(4)}) translate(-540 -620)">${sc.f(lt)}</g>`;
+  }
+  return s;
+}
+function header(t){
+  let s=`<rect x="0" y="0" width="1080" height="300" fill="${NAVY}"/>`;
+  s+=`<rect x="0" y="296" width="1080" height="8" fill="${INK}"/>`;
+  s+=`<rect x="0" y="292" width="${(1080*t/TOTAL).toFixed(1)}" height="8" fill="${AMBER}"/>`;
+  s+=G(540,78,1,pill('ОФД · ТЕРМИНАЛ',AMBER,INK,26));
+  let cur=TITLES[0],ci=0;TITLES.forEach((x,i)=>{if(t>=x[0]){cur=x;ci=i}});
+  const p=pop(t,cur[0],.45);
+  const lines=cur[1];
+  const ys=lines.length==1?[205]:[170,245];
+  let tt='';lines.forEach((l,i)=>tt+=`<text class="fit" data-max="1000" x="540" y="${ys[i]}" font-size="${lines.length==1?68:62}" font-weight="900" fill="#fff" text-anchor="middle">${esc(l).replace(/(ОФД|Kaspi)/g,'<tspan fill="'+AMBER+'">$1</tspan>')}</text>`);
+  s+=`<g transform="translate(540 ${lines.length==1?180:190}) scale(${(.85+.15*p).toFixed(3)}) translate(-540 ${-(lines.length==1?180:190)})" opacity="${clamp((t-cur[0])/.2).toFixed(2)}">${tt}</g>`;
+  return s;
+}
+function subs(t){
+  const c=CUES.find(c=>t>=c[0]&&t<c[1]+.15);
+  if(!c) return '';
+  const op=clamp((t-c[0])/.15);
+  const lines=c[2];const lh=56;const y0=1530-(lines.length-1)*lh/2;
+  let tt='';lines.forEach((l,i)=>{tt+=`<text x="540" y="${y0+i*lh+20}" class="fit" data-max="960" font-size="44" font-weight="800" fill="${INK}" text-anchor="middle">${esc(l).replace(/(ОФД[^\s,.:!?—]*)/g,'<tspan fill="'+TEAL_D+'">$1</tspan>').replace(/(Kaspi[^\s,.:!?—]*)/g,'<tspan fill="'+RED+'">$1</tspan>')}</text>`});
+  return `<g id="sub" opacity="${op.toFixed(2)}" transform="translate(0 ${((1-op)*12).toFixed(1)})"><rect id="subbox" x="40" y="${y0-50}" width="1000" height="${lines.length*lh+38}" rx="28" fill="#fff" stroke="${INK}" stroke-width="5"/>${tt}</g>`;
+}
+function render(t){
+  const st=document.getElementById('stage');
+  st.innerHTML=sceneAt(t)+header(t)+subs(t);
+  st.querySelectorAll('.fit').forEach(el=>{const w=el.getBBox().width,m=+el.dataset.max;if(w>m){el.setAttribute('transform',`translate(540 0) scale(${m/w} 1) translate(-540 0)`)}});
+  const sb=document.getElementById('subbox');
+  if(sb){let w=0;document.querySelectorAll('#sub text').forEach(e=>w=Math.max(w,Math.min(960,e.getBBox().width)));w=Math.min(1000,w+70);sb.setAttribute('x',540-w/2);sb.setAttribute('width',w)}
+}
+window.render=render;
+</script>
+</body></html>
